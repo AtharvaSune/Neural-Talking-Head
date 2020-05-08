@@ -26,15 +26,13 @@ GPU = {
 }
 
 
-# region Training
 def meta_train(gpu, dataset_path, continue_id):
     run_start = datetime.now()
     logging.info('===== META-TRAINING =====')
     logging.info(f'Running on {"GPU" if gpu else "CPU"}.')
 
-    # region DATASET----------------------------------------------------------------------------------------------------
     logging.info(f'Training using dataset located in {dataset_path}')
-    raw_dataset = TBGenomicsDataset(
+    raw_dataset = VoxCelebDataset(
         path=dataset_path,
         shuffle=True,
         transform=transforms.Compose([
@@ -46,7 +44,6 @@ def meta_train(gpu, dataset_path, continue_id):
 
     # endregion
 
-    # region NETWORK ---------------------------------------------------------------------------------------------------
 
     E = network.Embedder(GPU['Embedder'])
     G = network.Generator(GPU['Generator'])
@@ -66,7 +63,6 @@ def meta_train(gpu, dataset_path, continue_id):
 
     # endregion
 
-    # region TRAINING LOOP ---------------------------------------------------------------------------------------------
     logging.info(f'Epochs: {config.EPOCHS} Batches: {len(dataset)} Batch Size: {config.BATCH_SIZE}')
 
     for epoch in range(config.EPOCHS):
@@ -78,7 +74,6 @@ def meta_train(gpu, dataset_path, continue_id):
 
         for batch_num, (i, data) in enumerate(dataset):
 
-            # region PROCESS BATCH -------------------------------------------------------------------------------------
             batch_start = datetime.now()
 
             # video [B, K+1,2 C, W, H]
@@ -127,7 +122,6 @@ def meta_train(gpu, dataset_path, continue_id):
 
             # endregion
 
-            # region SHOW PROGRESS -------------------------------------------------------------------------------------
             if (batch_num + 1) % 1 == 0 or batch_num == 0:
                 logging.info(f'Epoch {epoch + 1}: [{batch_num + 1}/{len(dataset)}] | '
                              f'Time: {batch_end - batch_start} | '
@@ -135,7 +129,6 @@ def meta_train(gpu, dataset_path, continue_id):
                 logging.debug(f'D(x) = {r_x.mean().item():.4f} D(x_hat) = {r_x_hat.mean().item():.4f}')
             # endregion
 
-            # region SAVE ----------------------------------------------------------------------------------------------
             save_image(os.path.join(config.GENERATED_DIR, f'last_result_x.png'), x_t[0])
             save_image(os.path.join(config.GENERATED_DIR, f'last_result_x_hat.png'), x_hat[0])
 
@@ -163,7 +156,6 @@ def meta_train(gpu, dataset_path, continue_id):
 
 # endregion
 
-# region Model Manipulation
 def save_model(model, gpu, time_for_name=None):
     if time_for_name is None:
         time_for_name = datetime.now()

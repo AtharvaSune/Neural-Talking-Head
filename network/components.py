@@ -11,9 +11,11 @@ def init_conv(conv):
         conv.bias.data.zero_()
 
 
-# region General Blocks
-
 class SelfAttention(nn.Module):
+    """
+        Implementation of self attention layer according to 
+        the paper 
+    """
     def __init__(self, in_dim):
         super(SelfAttention, self).__init__()
 
@@ -25,7 +27,7 @@ class SelfAttention(nn.Module):
         self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
-        # B: mini batches, C: channels, W: width, H: height
+
         B, C, H, W = x.shape
         proj_query = self.query_conv(x).view(B, -1, W * H).permute(0, 2, 1)  # B X CX(N)
         proj_key = self.key_conv(x).view(B, -1, W * H)  # B X C x (*W*H)
@@ -44,6 +46,10 @@ class SelfAttention(nn.Module):
 class ConvLayer(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding=None):
         super(ConvLayer, self).__init__()
+        """
+            All Conv Layers have reflection pad and spectral normalization
+            (as discussed in the paper)
+        """
         if padding is None:
             padding = kernel_size // 2
         self.reflection_pad = nn.ReflectionPad2d(padding)
@@ -56,6 +62,9 @@ class ConvLayer(nn.Module):
 
 
 class AdaIn(nn.Module):
+    """
+        Implementation of Adaptive Instance Normalization
+    """
     def __init__(self):
         super(AdaIn, self).__init__()
         self.eps = 1e-5
@@ -74,32 +83,25 @@ class AdaIn(nn.Module):
         return adain
 
 
-# endregion
-
-# region Non-Adaptive Residual Blocks
 
 class ResidualBlockDown(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=None):
         super(ResidualBlockDown, self).__init__()
 
-        # Right Side
         self.conv_r1 = ConvLayer(in_channels, out_channels, kernel_size, stride, padding)
         self.conv_r2 = ConvLayer(out_channels, out_channels, kernel_size, stride, padding)
 
-        # Left Side
         self.conv_l = ConvLayer(in_channels, out_channels, 1, 1)
 
     def forward(self, x):
         residual = x
 
-        # Right Side
         out = F.relu(x)
         out = self.conv_r1(out)
         out = F.relu(out)
         out = self.conv_r2(out)
         out = F.avg_pool2d(out, 2)
 
-        # Left Side
         residual = self.conv_l(residual)
         residual = F.avg_pool2d(residual, 2)
 
@@ -115,20 +117,17 @@ class ResidualBlockUp(nn.Module):
         # General
         self.upsample = nn.Upsample(scale_factor=upsample, mode='nearest')
 
-        # Right Side
         self.norm_r1 = nn.InstanceNorm2d(in_channels, affine=True)
         self.conv_r1 = ConvLayer(in_channels, out_channels, kernel_size, stride)
 
         self.norm_r2 = nn.InstanceNorm2d(out_channels, affine=True)
         self.conv_r2 = ConvLayer(out_channels, out_channels, kernel_size, stride)
 
-        # Left Side
         self.conv_l = ConvLayer(in_channels, out_channels, 1, 1)
 
     def forward(self, x):
         residual = x
 
-        # Right Side
         out = self.norm_r1(x)
         out = F.relu(out)
         out = self.upsample(out)
@@ -137,7 +136,6 @@ class ResidualBlockUp(nn.Module):
         out = F.relu(out)
         out = self.conv_r2(out)
 
-        # Left Side
         residual = self.upsample(residual)
         residual = self.conv_l(residual)
 
@@ -167,9 +165,6 @@ class ResidualBlock(nn.Module):
         return out
 
 
-# endregion
-
-# region Adaptive Residual Blocks
 
 
 class AdaptiveResidualBlockUp(nn.Module):
@@ -182,20 +177,17 @@ class AdaptiveResidualBlockUp(nn.Module):
         # General
         self.upsample = nn.Upsample(scale_factor=upsample, mode='nearest')
 
-        # Right Side
         self.norm_r1 = AdaIn()
         self.conv_r1 = ConvLayer(in_channels, out_channels, kernel_size, stride)
 
         self.norm_r2 = AdaIn()
         self.conv_r2 = ConvLayer(out_channels, out_channels, kernel_size, stride)
 
-        # Left Side
         self.conv_l = ConvLayer(in_channels, out_channels, 1, 1)
 
     def forward(self, x, mean1, std1, mean2, std2):
         residual = x
 
-        # Right Side
         out = self.norm_r1(x, mean1, std1)
         out = F.relu(out)
         out = self.upsample(out)
@@ -204,7 +196,6 @@ class AdaptiveResidualBlockUp(nn.Module):
         out = F.relu(out)
         out = self.conv_r2(out)
 
-        # Left Side
         residual = self.upsample(residual)
         residual = self.conv_l(residual)
 
@@ -232,5 +223,3 @@ class AdaptiveResidualBlock(nn.Module):
 
         out = out + residual
         return out
-
-# endregion

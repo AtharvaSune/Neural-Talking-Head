@@ -30,8 +30,6 @@ class Embedder(nn.Module):
     def __init__(self, gpu=None):
         super(Embedder, self).__init__()
         
-        self.conv11 = ResidualBlockDown(2, 2)
-        self.conv12 = ResidualBlockDown(2, 2)
         self.conv1 = ResidualBlockDown(2, 64)
         self.conv2 = ResidualBlockDown(64, 128)
         self.conv3 = ResidualBlockDown(128, 256)
@@ -48,18 +46,16 @@ class Embedder(nn.Module):
             self.cuda(gpu)
 
     def forward(self, x, y):
-        # print("Network", x.shape)
-        # assert x.dim() == 3 and x.shape[1] == 1, "Both x and y must be tensors with shape [BxK, 1, W, H]."
-        assert x.shape == y.shape, "Both x and y must be tensors with shape [BxK, 1, W, H]."
+        assert x.dim() == 4 and x.shape[1] == 3, "Both x and y must be tensors with shape [BxK, 3, W, H]."
+        assert x.shape == y.shape, "Both x and y must be tensors with shape [BxK, 3, W, H]."
         if self.gpu is not None:
             x = x.cuda(self.gpu)
             y = y.cuda(self.gpu)
 
         # Concatenate x & y
-        out = torch.cat((x, y), dim=1)  # [BxK, 2, 1024, 1024]
+        out = torch.cat((x, y), dim=1)  # [BxK, 2, 256, 256]
 
         # Encode
-        out = self.conv12(self.conv11(out))
         out = (self.conv1(out))  # [BxK, 64, 128, 128]
         out = (self.conv2(out))  # [BxK, 128, 64, 64]
         out = (self.conv3(out))  # [BxK, 256, 32, 32]
@@ -97,12 +93,6 @@ class Generator(nn.Module):
         self.projection = nn.Parameter(torch.rand(self.psi_length, config.E_VECTOR_LENGTH).normal_(0.0, 0.02))
 
         # encoding layers
-
-        self.conv11 = ResidualBlockDown(1, 1)
-        self.in11_e = nn.InstanceNorm2d(1, affine=True)
-
-        self.conv12 = ResidualBlockDown(1, 1)
-        self.in12_e = nn.InstanceNorm2d(1, affine=True)
 
         self.conv1 = ResidualBlockDown(1, 64)
         self.in1_e = nn.InstanceNorm2d(64, affine=True)
@@ -152,12 +142,6 @@ class Generator(nn.Module):
         self.deconv1 = AdaptiveResidualBlockUp(64, 3, upsample=2)
         self.in1_d = nn.InstanceNorm2d(3, affine=True)
 
-        self.deconv11 = ResidualBlockUp(3, 1, upsample=2)
-        self.in11_d = nn.InstanceNorm2d(1, affine=True)
-
-        self.deconv12 = ResidualBlockUp(1, 1, upsample=2)
-        self.in12_d = nn.InstanceNorm2d(1, affine=True)
-
         self.apply(weights_init)
         self.gpu = gpu
         if gpu is not None:
@@ -176,8 +160,6 @@ class Generator(nn.Module):
         psi_hat = torch.bmm(P, e.unsqueeze(2)).squeeze(2)
 
         # Encode
-        out = self.in11_e(self.conv11(out)) # [B, 1, 512, 512]
-        out = self.in12_e(self.conv12(out)) # [B, 1, 256, 256]
         out = self.in1_e(self.conv1(out))  # [B, 64, 128, 128]
         out = self.in2_e(self.conv2(out))  # [B, 128, 64, 64]
         out = self.in3_e(self.conv3(out))  # [B, 256, 32, 32]
@@ -232,8 +214,6 @@ class Discriminator(nn.Module):
     def __init__(self, training_videos, gpu=None):
         super(Discriminator, self).__init__()
 
-        self.conv11 = ResidualBlockDown(2, 2)
-        self.conv12 = ResidualBlockDown(2, 2)
         self.conv1 = ResidualBlockDown(2, 64)
         self.conv2 = ResidualBlockDown(64, 128)
         self.conv3 = ResidualBlockDown(128, 256)
@@ -255,7 +235,7 @@ class Discriminator(nn.Module):
             self.cuda(gpu)
 
     def forward(self, x, y, i):
-        assert x.dim() == 4 and x.shape[1] == 1, "Both x and y must be tensors with shape [BxK, 3, W, H]."
+        assert x.dim() == 4 and x.shape[1] == 3, "Both x and y must be tensors with shape [BxK, 3, W, H]."
         assert x.shape == y.shape, "Both x and y must be tensors with shape [BxK, 3, W, H]."
 
         if self.gpu is not None:
@@ -266,7 +246,6 @@ class Discriminator(nn.Module):
         out = torch.cat((x, y), dim=1)  # [B, 6, 256, 256]
 
         # Encode
-        out = self.conv12(self.conv11(out))
         out_0 = (self.conv1(out))  # [B, 64, 128, 128]
         out_1 = (self.conv2(out_0))  # [B, 128, 64, 64]
         out_2 = (self.conv3(out_1))  # [B, 256, 32, 32]
